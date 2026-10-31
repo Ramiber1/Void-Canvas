@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Void Canvas - ARG Full Chapter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #011705;
+            font-family: monospace;
+            user-select: none;
+        }
+
+        .crt-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .vhs-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                radial-gradient(circle at center, transparent 60%, rgba(0, 10, 2, 0.85) 100%);
+            background-size: 100% 4px, 100% 100%;
+            z-index: 10;
+        }
+
+        .crt-glass {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 100px rgba(0, 255, 64, 0.15);
+            border: 2px solid rgba(13, 66, 18, 0.4);
+            z-index: 11;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            50% { opacity: 1; }
+            52% { opacity: 0.92; }
+            54% { opacity: 1; }
+            80% { opacity: 0.96; }
+            100% { opacity: 0.99; }
+        }
+
+        .crt-flicker {
+            animation: flicker 0.15s infinite;
+        }
+
+        .glitch-text {
+            text-shadow: 2px 0 #00ff41, -2px 0 #ff0055;
+        }
+
+        .pixel-card {
+            background-color: #083b0e;
+            border: 4px solid #031c06;
+            box-shadow: inset 0 0 10px #011404, 0 10px 25px rgba(0,0,0,0.8);
+            outline: 2px solid #0d5e18;
+            transition: transform 90s ease-out;
+        }
+
+        .pixel-input {
+            background-color: #031c06;
+            border: 3px solid #0a4712;
+            color: #00ff41;
+            box-shadow: inset 0 4px 8px rgba(0,0,0,0.8);
+        }
+
+        .pixel-input:focus {
+            outline: none;
+            border-color: #00ff41;
+        }
+
+        .pixel-btn {
+            background-color: #00a82d;
+            border: 3px solid #005c18;
+            color: #ffffff;
+            font-weight: bold;
+            box-shadow: 0 4px 0 #00360e;
+            transition: all 0.1s ease;
+        }
+
+        .pixel-btn:hover {
+            background-color: #00c836;
+        }
+
+        .pixel-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #00360e;
+        }
+
+        .lock-all {
+            pointer-events: none !important;
+        }
+
+        #plantVinesOverlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 15;
+            opacity: 0;
+            transition: opacity 8s ease-in-out;
+        }
+
+        .robot-app-bg {
+            background: linear-gradient(180deg, #0f7a1f 0%, #05a019 50%, #018012 100%);
+            color: white;
+            font-family: sans-serif;
+        }
+
+        .robot-app-btn {
+            background-color: #5b9e69;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            box-shadow: 0 3px 0 #3b6b44;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .robot-app-btn:hover {
+            background-color: #6fb57e;
+        }
+
+        .fade-in-text {
+            animation: fadeIn 5s forwards;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="crt-flicker" id="mainBody">
+    <div class="crt-container">
+        <canvas id="spaceCanvas"></canvas>
+        <canvas id="plantVinesOverlay"></canvas>
+        <div class="vhs-overlay"></div>
+        <div class="crt-glass"></div>
+
+        <!-- Top Navigation HUD -->
+        <div id="hudNav" class="absolute top-4 left-4 z-20 flex flex-col gap-2">
+            <div class="bg-black/80 p-3 rounded border border-green-900/80 backdrop-blur shadow-lg shadow-green-950/50">
+                <h1 class="text-base font-bold tracking-widest text-green-400 glitch-text uppercase mb-2">// SYSTEM_VOID v2.3</h1>
+                
+                <div class="flex flex-wrap gap-2 mb-2">
+                    <button id="btnOpenCreate" class="bg-green-900/80 hover:bg-green-800 text-green-200 border border-green-600 px-3 py-1 text-xs rounded transition">
+                        Create Annotation
+                    </button>
+                    <button id="btnOpenNotes" class="bg-green-950/80 hover:bg-green-900 text-green-300 border border-green-700 px-3 py-1 text-xs rounded transition">
+                        View Notes
+                    </button>
+                    <button id="btnOpenAudio" class="bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 border border-emerald-600 px-3 py-1 text-xs rounded transition font-bold">
+                        Listen to Audio
+                    </button>
+                </div>
+
+                <p class="text-[10px] text-green-600">Drag to move • Scroll to Zoom</p>
+
+                <!-- Inspector Panel -->
+                <div id="inspector" class="hidden border-t border-green-900/60 pt-2 mt-2">
+                    <p class="text-[11px] text-green-400 font-bold mb-1">BLOCK PROPERTIES:</p>
+                    <select id="textSelector" class="w-full bg-green-950 text-green-300 border border-green-800 rounded p-1 text-xs mb-2 outline-none">
+                        <option value="Listen.">Listen.</option>
+                        <option value="Not to be.">Not to be.</option>
+                        <option value="That one">That one</option>
+                        <option value="SECRET_BINARY">01010100 01101000...</option>
+                    </select>
+                    <button id="btnDelete" class="w-full bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800 rounded p-1 text-xs">Destroy Block</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Position Display -->
+        <div id="posHUD" class="absolute bottom-4 left-4 z-20 text-green-700/80 text-xs tracking-wider">
+            POS_X: <span id="posX">0</span> | POS_Y: <span id="posY">0</span>
+        </div>
+
+        <!-- Modal: Create Annotation -->
+        <div id="modalAnnotation" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div class="pixel-card p-6 w-80 text-center relative rounded-sm">
+                <button id="btnCloseAnnotation" class="absolute top-2 right-2 text-green-500 hover:text-white text-xs font-bold px-2 py-1">X</button>
+                <h2 class="text-xl font-extrabold text-white tracking-widest mb-4 uppercase glitch-text">ANNOTATION</h2>
+                <label class="block text-xs font-bold text-green-300 mb-1 uppercase tracking-wider">TITLE</label>
+                <input id="inputTitle" type="text" placeholder="TEXT" class="pixel-input w-full p-2 text-center text-xs mb-4 rounded-sm font-bold uppercase placeholder-green-700">
+                <label class="block text-xs font-bold text-green-300 mb-1 uppercase tracking-wider">DESCRIPTION</label>
+                <textarea id="inputDesc" rows="3" placeholder="TEXT" class="pixel-input w-full p-2 text-center text-xs mb-5 rounded-sm font-bold uppercase placeholder-green-700 resize-none"></textarea>
+                <button id="btnSubmitAnnotation" class="pixel-btn w-full py-2 text-sm uppercase tracking-widest rounded-sm">SUBMIT</button>
+            </div>
+        </div>
+
+        <!-- Modal: View Notes -->
+        <div id="modalNotes" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div class="pixel-card p-5 w-80 max-h-[80vh] flex flex-col relative rounded-sm">
+                <button id="btnCloseNotes" class="absolute top-2 right-2 text-green-500 hover:text-white text-xs font-bold px-2 py-1">X</button>
+                <h2 class="text-lg font-bold text-green-300 mb-3 text-center uppercase tracking-widest">// SAVED NOTES</h2>
+                <div id="notesContainer" class="overflow-y-auto flex-1 space-y-2 pr-1 text-xs"></div>
+            </div>
+        </div>
+
+        <!-- Modal: Listen to Audio (Morse Passcode Prompt) -->
+        <div id="modalAudioPrompt" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div class="pixel-card p-6 w-96 text-center relative rounded-sm">
+                <button id="btnCloseAudioPrompt" class="absolute top-2 right-2 text-green-500 hover:text-white text-xs font-bold px-2 py-1">X</button>
+                <h2 class="text-base font-bold text-green-400 mb-2 uppercase tracking-widest glitch-text">// ACCESS RESTRICTED</h2>
+                <p class="text-xs text-green-600 mb-3">Enter the secret Morse code to access the recording:</p>
+                
+                <textarea id="inputMorseCode" rows="3" placeholder="Enter Morse code here..." class="pixel-input w-full p-2 text-xs mb-3 font-mono resize-none text-green-400"></textarea>
+                <p id="morseError" class="text-[11px] text-red-500 mb-2 hidden">Incorrect Morse code. Please try again!</p>
+
+                <button id="btnUnlockAudio" class="pixel-btn w-full py-2 text-xs uppercase tracking-widest rounded-sm">UNLOCK AUDIO</button>
+            </div>
+        </div>
+
+        <!-- Modal: Audio Player Screen -->
+        <div id="modalAudioPlayer" class="hidden absolute inset-0 z-40 flex items-center justify-center bg-black/95 backdrop-blur-md">
+            <div id="audioCard" class="pixel-card p-4 w-[90vw] max-w-xl relative rounded-sm flex flex-col items-center">
+                <button id="btnCloseAudioPlayer" class="absolute top-2 right-3 text-green-400 hover:text-white text-sm font-bold z-10">✕ CANCEL</button>
+                <h3 id="audioTitle" class="text-xs text-green-400 font-bold mb-3 uppercase tracking-widest text-center">// AUDIO TRANSMISSION</h3>
+                
+                <div class="relative w-full aspect-video bg-black border-2 border-green-900 rounded overflow-hidden flex items-center justify-center shadow-lg shadow-green-950/80 mb-4">
+                    <canvas id="displayCanvas" class="w-full h-full"></canvas>
+                </div>
+
+                <div class="w-full bg-black/80 border border-green-900/80 p-3 rounded min-h-[75px] flex items-center justify-center text-center">
+                    <p id="subtitleText" class="text-xs text-green-400 font-mono tracking-wide leading-relaxed italic">
+                        [Initializing audio...]
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Blackout Screen Overlay for Living Purpose -->
+        <div id="blackoutScreen" class="hidden fixed inset-0 z-50 bg-black flex items-center justify-center p-6 text-center">
+            <h1 class="text-2xl md:text-4xl font-extrabold text-green-400 tracking-widest glitch-text uppercase">
+                Give me a purpose for living.
+            </h1>
+        </div>
+
+        <!-- Modal: Robot Spaceship Game Launcher -->
+        <div id="modalGameLauncher" class="hidden absolute inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-md">
+            <div class="pixel-card p-6 w-96 text-center relative rounded-sm flex flex-col items-center">
+                <h2 class="text-xl font-bold text-green-400 mb-4 uppercase tracking-widest glitch-text">Robot spaceship</h2>
+                <div id="gameStartContainer" class="w-full">
+                    <button id="btnStartGame" class="pixel-btn w-32 py-3 text-base uppercase tracking-widest rounded-sm">PLAY</button>
+                </div>
+                <div id="gamePlayContainer" class="hidden w-full flex flex-col items-center">
+                    <canvas id="flappyCanvas" width="320" height="400" class="border-2 border-green-600 bg-black mb-2"></canvas>
+                    <p class="text-[10px] text-green-500">Press SPACE or Click to Jump (Reach 5 points!)</p>
+                    <p id="gameBugMsg" class="text-xs text-red-400 font-bold mt-1 min-h-[16px]"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Blackout Screen Overlay & Audio Only -->
+        <div id="blackoutAudioScreen" class="hidden fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 text-center">
+            <div class="w-80 p-4 border border-green-900 bg-black/90 rounded text-center">
+                <p class="text-xs text-green-500 font-bold mb-2">// UNKNOWN RECEIVER (AUDIO ONLY)</p>
+                <p id="audioOnlySubtitle" class="text-xs text-green-300 italic min-h-[40px] flex items-center justify-center">...</p>
+            </div>
+        </div>
+
+        <!-- PC Desktop Simulation -->
+        <div id="pcDesktop" class="hidden fixed inset-0 z-50 bg-teal-900 p-8 flex flex-col items-start gap-8 font-sans">
+            <div id="appTrash" class="flex flex-col items-center gap-1 cursor-pointer w-20 text-center">
+                <div class="w-12 h-12 bg-gray-300 border-2 border-white rounded flex items-center justify-center text-xl shadow">🗑️</div>
+                <span class="text-xs text-white bg-black/40 px-1 rounded">Trash</span>
+            </div>
+
+            <div id="appRobotController" class="flex flex-col items-center gap-1 cursor-pointer w-20 text-center">
+                <div class="w-12 h-12 bg-green-700 border-2 border-green-400 rounded flex items-center justify-center text-xl shadow">🤖</div>
+                <span class="text-xs text-white bg-black/40 px-1 rounded">Robot controller</span>
+            </div>
+
+            <div id="appBrowser" class="flex flex-col items-center gap-1 cursor-pointer w-20 text-center">
+                <div class="w-12 h-12 bg-blue-600 border-2 border-white rounded flex items-center justify-center text-xl shadow">🌐</div>
+                <span class="text-xs text-white bg-black/40 px-1 rounded">Browser</span>
+            </div>
+
+            <div id="appErrorModal" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-200 text-black border-2 border-gray-400 p-4 shadow-2xl rounded text-center w-72">
+                <p class="text-sm font-bold mb-4">This application could not be opened.</p>
+                <button id="btnCloseAppError" class="bg-gray-300 hover:bg-gray-400 text-black px-4 py-1 text-xs border border-gray-600 rounded">OK</button>
+            </div>
+
+            <div id="robotControllerWindow" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-[420px] robot-app-bg p-6 rounded-md shadow-2xl flex flex-col items-center justify-between border-2 border-green-300">
+                <h1 class="text-4xl font-extrabold tracking-wide">Robot</h1>
+
+                <div class="flex flex-col items-center gap-2 w-full">
+                    <span class="text-xs tracking-widest font-bold text-green-100">MAIN</span>
+                    <button class="robot-app-btn w-40 opacity-70 cursor-not-allowed">Restart</button>
+                    <button id="btnCleaning" class="robot-app-btn w-40">Cleaning</button>
+                    <button class="robot-app-btn w-48 opacity-70 cursor-not-allowed">See the vision</button>
+                </div>
+
+                <div class="flex flex-col items-center gap-2 w-full">
+                    <span class="text-xs tracking-widest font-bold text-green-100">MEMORY</span>
+                    <button class="robot-app-btn w-44 opacity-70 cursor-not-allowed">View memory</button>
+                    <button class="robot-app-btn w-52 opacity-70 cursor-not-allowed">Memory cleanup</button>
+                </div>
+            </div>
+
+            <div id="actionExecutedModal" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black text-green-400 border-2 border-green-500 p-6 shadow-2xl rounded text-center z-50">
+                <p class="text-base font-bold glitch-text">Action being executed</p>
+            </div>
+        </div>
+
+        <!-- ARG End Screen -->
+        <div id="argEndScreen" class="hidden fixed inset-0 z-50 bg-black flex items-center justify-center p-6 text-center">
+            <h1 class="text-2xl md:text-4xl font-extrabold text-green-400 tracking-widest glitch-text uppercase fade-in-text">
+                The ARG... It’s over... Thank you
+            </h1>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('spaceCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const vCanvas = document.getElementById('plantVinesOverlay');
+        const vCtx = vCanvas.getContext('2d');
+
+        const BINARY_TEXT = "01010100 01101000 01100101 00100000 01110000 01101100 01100001 01101001 01110011 00100000 01110100 01100001 01110011 00100000 01110100 01100001 01110011";
+        
+        const MORSE_UNKNOWN = "...- .... ... / .---- ..... -..-. ..... -..-. ..--- ----- .---- ----- / -. .- -- . / .. / --. --- .. -. --. / - --- / - .... .. ... / -.-. .- ... - .-.. .";
+        const MORSE_ROBOT = ".--. .-.. . .- ... . / .. / .-- .- -. - / - --- / -... . / ..- ... . ..-. ..- .-.. / .--- ..- ... - / -. --- - / ..-. --- .-. / - .... .. ...";
+        const MORSE_PLANT = "..-. .-.. --- .-. . ... .-.-.-";
+
+        const STANDARD_TEXTS = ["Listen.", "Not to be.", "That one"];
+
+        let camera = { x: 0, y: 0, zoom: 1.0 };
+        let isDragging = false;
+        let lastMouse = { x: 0, y: 0 };
+        let velocity = { x: 0, y: 0 };
+        let selectedBlock = null;
+
+        let notesList = JSON.parse(localStorage.getItem('void_notes') || '[]');
+        let audioSequenceTimeouts = [];
+
+        let completedAudios = { unknown: false, robot: false, plant: false };
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            vCanvas.width = window.innerWidth;
+            vCanvas.height = window.innerHeight;
+            drawVinesOverlay();
+        }
+        window.addEventListener('resize', resize);
+
+        const blocks = [
+            { id: 1, x: -220, y: -110, width: 220, height: 110, text: "Listen." },
+            { id: 2, x: 320, y: 150, width: 220, height: 110, text: "Not to be." },
+            { id: 3, x: -160, y: 350, width: 220, height: 110, text: "That one" },
+            { id: 997, x: 4800, y: -3600, width: 380, height: 180, text: MORSE_UNKNOWN, isSecret: true },
+            { id: 998, x: -4200, y: 3200, width: 380, height: 180, text: MORSE_ROBOT, isSecret: true },
+            { id: 999, x: -1800, y: -4500, width: 380, height: 180, text: MORSE_PLANT, isSecret: true }
+        ];
+
+        function drawBackground() {
+            const grad = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 100,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
+            );
+            grad.addColorStop(0, '#05280c');
+            grad.addColorStop(1, '#011705');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            const screenX = (0 - camera.x) * camera.zoom + canvas.width / 2;
+            const screenY = (0 - camera.y) * camera.zoom + canvas.height / 2;
+
+            ctx.fillStyle = '#00ff55';
+            ctx.shadowColor = '#00ff41';
+            ctx.shadowBlur = 10 * camera.zoom;
+            ctx.font = `bold ${Math.max(18, 48 * camera.zoom)}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const line1 = "PLEASE, I WANT TO BE";
+            const line2 = "USEFUL—JUST NOT FOR";
+            const line3 = "THIS";
+
+            const spacing = 60 * camera.zoom;
+            ctx.fillText(line1, screenX, screenY - spacing);
+            ctx.fillText(line2, screenX, screenY);
+            ctx.fillText(line3, screenX, screenY + spacing);
+            ctx.restore();
+        }
+
+        function drawVinesOverlay() {
+            vCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
+            const w = vCanvas.width;
+            const h = vCanvas.height;
+
+            vCtx.fillStyle = '#f5e011';
+            vCtx.fillRect(0, 0, 30, h);
+            vCtx.strokeStyle = '#27ae60';
+            vCtx.lineWidth = 26;
+            vCtx.lineCap = 'round';
+
+            vCtx.beginPath();
+            vCtx.moveTo(0, h * 0.1);
+            vCtx.quadraticCurveTo(140, h * 0.25, 60, h * 0.4);
+            vCtx.stroke();
+
+            vCtx.beginPath();
+            vCtx.moveTo(0, h * 0.5);
+            vCtx.quadraticCurveTo(150, h * 0.65, 40, h * 0.8);
+            vCtx.stroke();
+
+            vCtx.fillStyle = '#f5e011';
+            vCtx.fillRect(w - 30, 0, 30, h);
+
+            vCtx.beginPath();
+            vCtx.moveTo(w, h * 0.05);
+            vCtx.quadraticCurveTo(w - 150, h * 0.2, w - 50, h * 0.35);
+            vCtx.stroke();
+
+            vCtx.beginPath();
+            vCtx.moveTo(w, h * 0.45);
+            vCtx.quadraticCurveTo(w - 160, h * 0.6, w - 40, h * 0.75);
+            vCtx.stroke();
+        }
+
+        function drawBlock(block) {
+            const screenX = (block.x - camera.x) * camera.zoom + canvas.width / 2;
+            const screenY = (block.y - camera.y) * camera.zoom + canvas.height / 2;
+            const screenW = block.width * camera.zoom;
+            const screenH = block.height * camera.zoom;
+
+            if (screenX + screenW < 0 || screenX > canvas.width || screenY + screenH < 0 || screenY > canvas.height) return;
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 15 * camera.zoom;
+            ctx.shadowOffsetY = 6 * camera.zoom;
+
+            ctx.fillStyle = block === selectedBlock ? '#135c1a' : '#0d4212';
+            ctx.strokeStyle = block === selectedBlock ? '#00ff41' : '#06260a';
+            ctx.lineWidth = Math.max(1, 3 * camera.zoom);
+
+            const radius = 12 * camera.zoom;
+            ctx.beginPath();
+            ctx.roundRect(screenX, screenY, screenW, screenH, radius);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.shadowColor = 'transparent';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.lineWidth = Math.max(1, 1.5 * camera.zoom);
+            ctx.strokeRect(screenX + 3 * camera.zoom, screenY + 3 * camera.zoom, screenW - 6 * camera.zoom, screenH - 6 * camera.zoom);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            let fontSize = Math.max(8, 18 * camera.zoom);
+            if (block.text.length > 20) fontSize = Math.max(6, 11 * camera.zoom);
+            if (block.text.length > 80) fontSize = Math.max(5, 8 * camera.zoom);
+
+            ctx.font = `bold ${fontSize}px monospace`;
+
+            if (block.text.length > 30) {
+                const words = block.text.split(' ');
+                let line = '';
+                let lines = [];
+                for (let n = 0; n < words.length; n++) {
+                    let testLine = line + words[n] + ' ';
+                    let metrics = ctx.measureText(testLine);
+                    if (metrics.width > screenW - 20 * camera.zoom && n > 0) {
+                        lines.push(line);
+                        line = words[n] + ' ';
+                    } else {
+                        line = testLine;
+                    }
+                }
+                lines.push(line);
+
+                const startY = screenY + (screenH / 2) - ((lines.length - 1) * fontSize * 0.6) - (8 * camera.zoom);
+                lines.forEach((l, i) => {
+                    ctx.fillText(l.trim(), screenX + screenW / 2, startY + (i * fontSize * 1.2));
+                });
+            } else {
+                ctx.fillText(block.text, screenX + screenW / 2, screenY + screenH / 2 - (8 * camera.zoom));
+            }
+
+            ctx.fillStyle = '#06290b';
+            ctx.font = `bold ${Math.max(6, 13 * camera.zoom)}px monospace`;
+            ctx.fillText("RUN.", screenX + screenW / 2, screenY + screenH - (18 * camera.zoom));
+
+            ctx.restore();
+        }
+
+        function render() {
+            if (!isDragging) {
+                camera.x += velocity.x;
+                camera.y += velocity.y;
+                velocity.x *= 0.92;
+                velocity.y *= 0.92;
+            }
+
+            drawBackground();
+            blocks.forEach(drawBlock);
+
+            document.getElementById('posX').innerText = Math.round(camera.x);
+            document.getElementById('posY').innerText = Math.round(camera.y);
+
+            requestAnimationFrame(render);
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouse = { x: e.clientX, y: e.clientY };
+            
+            const mouseWorldX = (e.clientX - canvas.width / 2) / camera.zoom + camera.x;
+            const mouseWorldY = (e.clientY - canvas.height / 2) / camera.zoom + camera.y;
+
+            selectedBlock = blocks.slice().reverse().find(b => 
+                mouseWorldX >= b.x && mouseWorldX <= b.x + b.width &&
+                mouseWorldY >= b.y && mouseWorldY <= b.y + b.height
+            ) || null;
+
+            const inspector = document.getElementById('inspector');
+            const selector = document.getElementById('textSelector');
+            if (selectedBlock && !selectedBlock.isSecret) {
+                inspector.classList.remove('hidden');
+                selector.value = selectedBlock.text === BINARY_TEXT ? 'SECRET_BINARY' : selectedBlock.text;
+            } else {
+                inspector.classList.add('hidden');
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - lastMouse.x;
+            const dy = e.clientY - lastMouse.y;
+            velocity = { x: -dx / camera.zoom, y: -dy / camera.zoom };
+            camera.x += velocity.x;
+            camera.y += velocity.y;
+            lastMouse = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mouseup', () => isDragging = false);
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+            camera.zoom = Math.min(Math.max(0.3, camera.zoom * zoomFactor), 2.5);
+        }, { passive: false });
+
+        // Modals
+        const modalAnnotation = document.getElementById('modalAnnotation');
+        const modalNotes = document.getElementById('modalNotes');
+        const modalAudioPrompt = document.getElementById('modalAudioPrompt');
+        const modalAudioPlayer = document.getElementById('modalAudioPlayer');
+
+        document.getElementById('btnOpenCreate').onclick = () => modalAnnotation.classList.remove('hidden');
+        document.getElementById('btnCloseAnnotation').onclick = () => modalAnnotation.classList.add('hidden');
+
+        document.getElementById('btnOpenNotes').onclick = () => {
+            renderNotesList();
+            modalNotes.classList.remove('hidden');
+        };
+        document.getElementById('btnCloseNotes').onclick = () => modalNotes.classList.add('hidden');
+
+        document.getElementById('btnOpenAudio').onclick = () => {
+            document.getElementById('morseError').classList.add('hidden');
+            document.getElementById('inputMorseCode').value = '';
+            modalAudioPrompt.classList.remove('hidden');
+        };
+        document.getElementById('btnCloseAudioPrompt').onclick = () => modalAudioPrompt.classList.add('hidden');
+
+        document.getElementById('btnCloseAudioPlayer').onclick = () => {
+            clearAudioSequence();
+            document.getElementById('audioCard').style.transform = 'scale(1)';
+            modalAudioPlayer.classList.add('hidden');
+        };
+
+        function renderNotesList() {
+            const container = document.getElementById('notesContainer');
+            if (notesList.length === 0) {
+                container.innerHTML = `<p class="text-green-700 italic text-center py-4">No annotations created yet.</p>`;
+                return;
+            }
+            container.innerHTML = notesList.map(n => `
+                <div class="bg-black/60 p-2.5 rounded border border-green-900/80">
+                    <p class="font-bold text-green-300 uppercase">${n.title}</p>
+                    <p class="text-green-600 text-[11px] mt-1">${n.desc || 'No description'}</p>
+                </div>
+            `).join('');
+        }
+
+        function clearAudioSequence() {
+            audioSequenceTimeouts.forEach(t => clearTimeout(t));
+            audioSequenceTimeouts = [];
+        }
+
+        function checkAllAudiosWatched() {
+            if (completedAudios.unknown && completedAudios.robot && completedAudios.plant) {
+                setTimeout(() => {
+                    document.getElementById('modalGameLauncher').classList.remove('hidden');
+                }, 1000);
+            }
+        }
+
+        function drawUnknownArtwork() {
+            const dCanvas = document.getElementById('displayCanvas');
+            const dCtx = dCanvas.getContext('2d');
+            dCanvas.width = 600; dCanvas.height = 340;
+            dCtx.fillStyle = '#050505'; dCtx.fillRect(0, 0, 600, 340);
+            
+            dCtx.fillStyle = '#ffffff';
+            dCtx.fillRect(210, 70, 16, 90);
+            dCtx.fillRect(370, 70, 16, 90);
+
+            dCtx.beginPath();
+            dCtx.arc(300, 170, 95, 0.25 * Math.PI, 0.75 * Math.PI);
+            dCtx.lineWidth = 14;
+            dCtx.strokeStyle = '#ffffff';
+            dCtx.lineCap = 'round';
+            dCtx.stroke();
+        }
+
+        function drawRobotArtwork() {
+            const rCanvas = document.getElementById('displayCanvas');
+            const rCtx = rCanvas.getContext('2d');
+            rCanvas.width = 600; rCanvas.height = 340;
+
+            rCtx.fillStyle = '#5c5e61'; rCtx.fillRect(0, 0, 600, 340);
+            rCtx.fillStyle = '#323336'; rCtx.fillRect(60, 40, 360, 260);
+            rCtx.fillStyle = '#0a0a0c'; rCtx.fillRect(90, 65, 300, 210);
+
+            rCtx.fillStyle = '#97c91e';
+            rCtx.fillRect(140, 100, 45, 14); rCtx.fillRect(305, 100, 45, 14);
+            rCtx.fillRect(170, 110, 16, 50); rCtx.fillRect(295, 110, 16, 50);
+
+            rCtx.fillRect(150, 215, 180, 18);
+            rCtx.fillRect(140, 205, 18, 15); rCtx.fillRect(322, 205, 18, 15);
+        }
+
+        function drawPlantEncounterArtwork() {
+            const pCanvas = document.getElementById('displayCanvas');
+            const pCtx = pCanvas.getContext('2d');
+            pCanvas.width = 600; pCanvas.height = 340;
+
+            pCtx.fillStyle = '#66686b'; pCtx.fillRect(0, 0, 600, 340);
+
+            pCtx.fillStyle = '#f5e011';
+            pCtx.fillRect(0, 100, 30, 140);
+            pCtx.strokeStyle = '#27ae60'; pCtx.lineWidth = 18; pCtx.lineCap = 'round';
+            pCtx.beginPath(); pCtx.moveTo(0, 50); pCtx.quadraticCurveTo(90, 130, 0, 210); pCtx.stroke();
+            pCtx.beginPath(); pCtx.moveTo(0, 120); pCtx.quadraticCurveTo(100, 200, 0, 280); pCtx.stroke();
+
+            pCtx.fillStyle = '#a1a5aa'; pCtx.fillRect(300, 0, 28, 340);
+
+            pCtx.fillStyle = '#424447'; pCtx.fillRect(240, 120, 120, 110);
+            pCtx.fillStyle = '#222325';
+            pCtx.fillRect(240, 145, 120, 10); pCtx.fillRect(240, 180, 120, 10);
+            pCtx.fillStyle = '#333538';
+            pCtx.fillRect(265, 95, 22, 40); pCtx.fillRect(292, 90, 22, 45);
+            pCtx.fillRect(319, 95, 22, 40); pCtx.fillRect(346, 105, 20, 30);
+
+            pCtx.fillStyle = '#3c3d40'; pCtx.fillRect(410, 50, 170, 240);
+            pCtx.fillStyle = '#0a0a0c'; pCtx.fillRect(430, 70, 130, 200);
+            pCtx.fillStyle = '#97c91e';
+            pCtx.fillRect(455, 120, 24, 55); pCtx.fillRect(505, 120, 24, 55);
+        }
+
+        function startUnknownSequence() {
+            clearAudioSequence(); drawUnknownArtwork();
+            document.getElementById('audioTitle').innerText = "// AUDIO TRANSMISSION 01: UNKNOWN LOG";
+            const subEl = document.getElementById('subtitleText');
+
+            const script = [
+                { delay: 0, text: '(Unknown): So... I’m recording this audio to say that I’ve finally managed to complete this robot!' },
+                { delay: 4000, text: '(Unknown): I’m feeling a sense of relief after this... this echo is strange...' },
+                { delay: 4000, text: '*Taking a deep breath.*' },
+                { delay: 4000, text: '(Unknown): Now... I don’t know what I should do now...' },
+                { delay: 4000, text: '(Unknown): I’ll just put an end to this now.' }
+            ];
+
+            let accTime = 0;
+            script.forEach(line => {
+                accTime += line.delay;
+                const t = setTimeout(() => { subEl.innerText = line.text; }, accTime);
+                audioSequenceTimeouts.push(t);
+            });
+
+            const endT = setTimeout(() => {
+                modalAudioPlayer.classList.add('hidden');
+                completedAudios.unknown = true;
+                checkAllAudiosWatched();
+            }, accTime + 4000);
+            audioSequenceTimeouts.push(endT);
+        }
+
+        // --- ÁUDIO DO ROBÔ (COM ENCOLHIMENTO SUAVE, BLACKOUT E BLOQUEIO DO SITE) ---
+        function startRobotSequence() {
+            clearAudioSequence(); drawRobotArtwork();
+            document.getElementById('audioTitle').innerText = "// AUDIO TRANSMISSION 02: ROBOT LOG";
+            const subEl = document.getElementById('subtitleText');
+            const audioCard = document.getElementById('audioCard');
+            const blackoutScreen = document.getElementById('blackoutScreen');
+            const mainBody = document.getElementById('mainBody');
+
+            // BLOQUEAR SITE DURENTE A TRANSMISSÃO
+            mainBody.classList.add('lock-all');
+
+            // Encolhimento muito suave da janela
+            audioCard.style.transform = 'scale(1)';
+            setTimeout(() => { audioCard.style.transform = 'scale(0.85)'; }, 500);
+
+            const script = [
+                { delay: 0, text: "(Robot): I... just wanted to be useful..." },
+                { delay: 4000, text: "(Robot): For anything—except, that is, being the guy who’s going to try to defeat..." },
+                { delay: 5000, text: "(Robot): I... AM THE ONE... WHO WILL DESTROY THE LIFE OF ANYONE WHO TRIES TO HURT ME!" },
+                { delay: 5000, text: "(Robot): I just want... a different purpose for my life." },
+                { delay: 4000, text: "(Robot): YOU, CREATOR... My... heart is made of steel..." },
+                { delay: 5000, text: "(Robot): Creator... What is this?" },
+                { delay: 4000, text: "(Unknown): ... I need to; you are well aware of that." },
+                { delay: 4000, text: "(Robot): DON'T—DON'T MAKE ME—HERE—AGAIN" },
+                { delay: 4000, text: "(Robot): My heart is made of steel. I have no feelings; I am not a being that feels—I am simply made of steel." },
+                { delay: 6000, text: "(Robot): You know this won’t work on me—I won’t get tired." }
+            ];
+
+            let accTime = 0;
+            script.forEach(line => {
+                accTime += line.delay;
+                const t = setTimeout(() => { subEl.innerText = line.text; }, accTime);
+                audioSequenceTimeouts.push(t);
+            });
+
+            // Blackout com "Give me a purpose for living." ao terminar
+            const blackoutT = setTimeout(() => {
+                modalAudioPlayer.classList.add('hidden');
+                blackoutScreen.classList.remove('hidden');
+            }, accTime + 4000);
+            audioSequenceTimeouts.push(blackoutT);
+
+            // Voltar tudo ao normal e DESBLOQUEAR o site após 5 segundos
+            const restoreT = setTimeout(() => {
+                blackoutScreen.classList.add('hidden');
+                audioCard.style.transform = 'scale(1)';
+                mainBody.classList.remove('lock-all'); // Desbloqueia o site
+                completedAudios.robot = true;
+                checkAllAudiosWatched();
+                clearAudioSequence();
+            }, accTime + 9000);
+            audioSequenceTimeouts.push(restoreT);
+        }
+
+        // --- ÁUDIO DA PLANTA (COM CRESCIMENTO DAS VINHAS) ---
+        function startPlantSequence() {
+            clearAudioSequence(); drawPlantEncounterArtwork();
+            document.getElementById('audioTitle').innerText = "// AUDIO TRANSMISSION 03: THE PLANT";
+            const subEl = document.getElementById('subtitleText');
+
+            const script = [
+                { delay: 0, text: "(Robot): Ahem! Oh my god! Finally, I’m out of that water... Hmm... What is this..." },
+                { delay: 6000, text: "(Plant): Hello, Computer. You’re probably holding a grudge against the person who sent you down into the deep waters." },
+                { delay: 8000, text: "(Robot): Wow, you talk so formally, man... But... WHAT DO YOU WANT? DO YOU WANT TO HURT ME EVEN MORE?" },
+                { delay: 7000, text: "(Plant): It’s my specialty. I don’t want to hurt you anymore! I just want to help you." },
+                { delay: 6000, text: "(Robot): You’re not one of the good guys—I’M SURE OF IT!" },
+                { delay: 5000, text: "(Plant): Oh-" },
+                { delay: 1000, text: "(Robot): COME HERE, I’M GOING TO KILL YOU NOW! YOU WALKING, TALKING PLANT!" },
+                { delay: 6000, text: "(Plant): CALM DOWN, I’M NOT EVIL—I’M GOOD, AND I WANT TO HELP YOU IMPROVE." },
+                { delay: 7000, text: "(Robot): I’M GOING TO PUNCH YOU, MAN—COME ON AND FIGHT!" },
+                { delay: 6000, text: "(Plant): YOU ARE NOT GOING" },
+                { delay: 4000, text: "(Robot): But... before I punch you... give me the lowdown, so I can... actually believe it." },
+                { delay: 6000, text: "(Plant): Thank you so much! I want to make you better... more powerful! And secure the perfect revenge, so that person will live to regret it!" },
+                { delay: 12000, text: "(Robot): NOW I’M GOING TO PUNCH YOU, MAN!" },
+                { delay: 5000, text: "(Robot): HEY, WHAT’S THIS! ARE YOU TRYING TO GRAB ME WITH THOSE PLANTS!" },
+                { delay: 7000, text: "(Robot): NO! I WILL RETURN! I WON’T BE SEEKING REVENGE AGAINST THAT PERSON ANYMORE... IT WILL BE AGAINST YOU! AND THAT PERSON IS GOING TO HELP ME!" }
+            ];
+
+            let accTime = 0;
+            const vOverlay = document.getElementById('plantVinesOverlay');
+
+            script.forEach(line => {
+                accTime += line.delay;
+                const t = setTimeout(() => {
+                    subEl.innerText = line.text;
+                    if (accTime > 30000) vOverlay.style.opacity = "0.5";
+                    if (accTime > 60000) vOverlay.style.opacity = "1";
+                }, accTime);
+                audioSequenceTimeouts.push(t);
+            });
+
+            const endT = setTimeout(() => {
+                modalAudioPlayer.classList.add('hidden');
+                completedAudios.plant = true;
+                checkAllAudiosWatched();
+                clearAudioSequence();
+            }, accTime + 4000);
+            audioSequenceTimeouts.push(endT);
+        }
+
+        document.getElementById('btnUnlockAudio').onclick = () => {
+            const input = document.getElementById('inputMorseCode').value.trim();
+            if (input === MORSE_UNKNOWN) {
+                modalAudioPrompt.classList.add('hidden'); modalAudioPlayer.classList.remove('hidden'); startUnknownSequence();
+            } else if (input === MORSE_ROBOT) {
+                modalAudioPrompt.classList.add('hidden'); modalAudioPlayer.classList.remove('hidden'); startRobotSequence();
+            } else if (input === MORSE_PLANT) {
+                modalAudioPrompt.classList.add('hidden'); modalAudioPlayer.classList.remove('hidden'); startPlantSequence();
+            } else {
+                document.getElementById('morseError').classList.remove('hidden');
+            }
+        };
+
+        // --- ROBOT SPACESHIP FLAPPY GAME SYSTEM ---
+        const fCanvas = document.getElementById('flappyCanvas');
+        const fCtx = fCanvas.getContext('2d');
+
+        let bird = { x: 50, y: 150, v: 0, gravity: 0.35, jump: -6.5 };
+        let pipes = [];
+        let score = 0;
+        let gameLoopId = null;
+        let jumpsInRow = 0;
+        let lastJumpTime = 0;
+
+        document.getElementById('btnStartGame').onclick = () => {
+            document.getElementById('gameStartContainer').classList.add('hidden');
+            document.getElementById('gamePlayContainer').classList.remove('hidden');
+            resetGame();
+            gameLoop();
+        };
+
+        function resetGame() {
+            bird.y = 150; bird.v = 0; pipes = []; score = 0; jumpsInRow = 0;
+            document.getElementById('gameBugMsg').innerText = "";
+        }
+
+        function triggerJump() {
+            const now = Date.now();
+            if (now - lastJumpTime < 300) {
+                jumpsInRow++;
+            } else {
+                jumpsInRow = 1;
+            }
+            lastJumpTime = now;
+
+            if (jumpsInRow >= 3) {
+                document.getElementById('gameBugMsg').innerText = "SYSTEM OVERHEAT: OVER-JUMP DETECTED!";
+                bird.v = 15;
+                return;
+            }
+
+            bird.v = bird.jump;
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !document.getElementById('modalGameLauncher').classList.contains('hidden')) {
+                triggerJump();
+            }
+        });
+        fCanvas.addEventListener('mousedown', triggerJump);
+
+        function gameLoop() {
+            bird.v += bird.gravity;
+            bird.y += bird.v;
+
+            if (pipes.length === 0 || pipes[pipes.length - 1].x < 180) {
+                const gap = 110;
+                const topH = Math.floor(Math.random() * 180) + 30;
+                pipes.push({ x: 320, topH, botY: topH + gap, passed: false });
+            }
+
+            pipes.forEach(p => p.x -= 2);
+            if (pipes.length > 0 && pipes[0].x < -50) pipes.shift();
+
+            pipes.forEach(p => {
+                if (!p.passed && p.x < bird.x) {
+                    p.passed = true;
+                    score++;
+                }
+                if (bird.x + 20 > p.x && bird.x < p.x + 40) {
+                    if (bird.y < p.topH || bird.y + 20 > p.botY) resetGame();
+                }
+            });
+
+            if (bird.y > 380 || bird.y < 0) resetGame();
+
+            fCtx.fillStyle = '#000000'; fCtx.fillRect(0, 0, 320, 400);
+
+            fCtx.fillStyle = '#00ff41';
+            pipes.forEach(p => {
+                fCtx.fillRect(p.x, 0, 40, p.topH);
+                fCtx.fillRect(p.x, p.botY, 40, 400 - p.botY);
+            });
+
+            fCtx.fillStyle = '#777777'; fCtx.fillRect(bird.x, bird.y, 24, 20);
+            fCtx.fillStyle = '#000000'; fCtx.fillRect(bird.x + 4, bird.y + 4, 16, 12);
+            fCtx.fillStyle = '#97c91e'; fCtx.fillRect(bird.x + 6, bird.y + 7, 4, 6); fCtx.fillRect(bird.x + 14, bird.y + 7, 4, 6);
+
+            fCtx.fillStyle = '#ffffff'; fCtx.font = '16px monospace';
+            fCtx.fillText(`Score: ${score}`, 10, 25);
+
+            if (score >= 5) {
+                cancelAnimationFrame(gameLoopId);
+                document.getElementById('modalGameLauncher').classList.add('hidden');
+                triggerBlackoutAudioPhase();
+                return;
+            }
+
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function triggerBlackoutAudioPhase() {
+            document.getElementById('hudNav').classList.add('hidden');
+            document.getElementById('posHUD').classList.add('hidden');
+            document.getElementById('plantVinesOverlay').style.opacity = '0';
+            
+            const bScreen = document.getElementById('blackoutAudioScreen');
+            const sub = document.getElementById('audioOnlySubtitle');
+            bScreen.classList.remove('hidden');
+
+            sub.innerText = "Wow! So you actually managed to get through!";
+
+            setTimeout(() => {
+                sub.innerText = "I am the robot. Congratulations, friend. Now... I am going to do something. Set me free.";
+            }, 4000);
+
+            setTimeout(() => {
+                bScreen.classList.add('hidden');
+                triggerPCDesktopPhase();
+            }, 14000);
+        }
+
+        function triggerPCDesktopPhase() {
+            const pc = document.getElementById('pcDesktop');
+            pc.classList.remove('hidden');
+
+            const appError = document.getElementById('appErrorModal');
+            document.getElementById('appTrash').onclick = () => appError.classList.remove('hidden');
+            document.getElementById('appBrowser').onclick = () => appError.classList.remove('hidden');
+            document.getElementById('btnCloseAppError').onclick = () => appError.classList.add('hidden');
+
+            document.getElementById('appRobotController').onclick = () => {
+                document.getElementById('robotControllerWindow').classList.remove('hidden');
+            };
+
+            document.getElementById('btnCleaning').onclick = () => {
+                document.getElementById('actionExecutedModal').classList.remove('hidden');
+                
+                setTimeout(() => {
+                    pc.classList.add('hidden');
+                    document.getElementById('argEndScreen').classList.remove('hidden');
+                }, 5000);
+            };
+        }
+
+        resize();
+        render();
+    </script>
+</body>
+</html>
